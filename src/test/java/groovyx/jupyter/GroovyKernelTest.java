@@ -45,6 +45,13 @@ class GroovyKernelTest {
     }
 
     @Test
+    void gstringResultsRenderAsText() {
+        kernel.evalBuilder("who = 'world'").resolveMagics().eval();
+        DisplayData out = kernel.evalBuilder("\"hi ${who}\"").resolveMagics().renderResults().eval();
+        assertEquals("hi world", out.getData(MIMEType.TEXT_PLAIN));
+    }
+
+    @Test
     void percentSignIsNotAMagic() {
         DisplayData out = kernel.evalBuilder("7 % 4").resolveMagics().renderResults().eval();
         assertEquals("3", out.getData(MIMEType.TEXT_PLAIN));
@@ -66,6 +73,14 @@ class GroovyKernelTest {
     void isCompleteAnswers() {
         assertEquals(BaseKernel.IS_COMPLETE_YES, kernel.isComplete("println 'hi'"));
         assertEquals("", kernel.isComplete("if (true) {"));
+    }
+
+    @Test
+    void bannerNamesGroovyAndJvmVersions() {
+        String banner = kernel.getBanner();
+        assertTrue(banner.contains("Groovy " + kernel.getLanguageInfo().getVersion()), banner);
+        assertTrue(banner.contains("JDK " + System.getProperty("java.version")), banner);
+        assertTrue(banner.contains(GroovyKernel.KERNEL_NAME), banner);
     }
 
     @Test

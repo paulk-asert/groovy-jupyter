@@ -27,13 +27,16 @@ repositories {
     mavenCentral()
 }
 
-def groovyVersion = '6.0.0-beta-2'
+def groovyVersion = '6.0.0-beta-3'
 
 dependencies {
     implementation 'org.dflib.jjava:jjava-jupyter:1.0-a8'
     implementation "org.apache.groovy:groovy:${groovyVersion}"
     // maven-resolver-based GrapeEngine (no Ivy); discovered via ServiceLoader at runtime
     runtimeOnly "org.apache.groovy:groovy-grape-maven:${groovyVersion}"
+    // ASF Groovy optional modules shipped with the kernel (not third-party bundling);
+    // which further modules (json, sql, ...) ship by default is pending team review
+    runtimeOnly "org.apache.groovy:groovy-csv:${groovyVersion}"
     runtimeOnly 'org.slf4j:slf4j-jdk14:2.0.17'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
