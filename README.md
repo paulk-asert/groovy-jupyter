@@ -33,7 +33,7 @@ session classloader is rescanned when grabs grow the classpath) — all verified
 end-to-end over the Jupyter wire protocol. The wider plan is still
 being socialized with the Groovy community; design decisions below are
 proposals, not commitments. The full plan-of-attack assessment is recorded in
-[docs/assessment.html](docs/assessment.html).
+[docs/assessment.md](docs/assessment.md).
 
 Getting started
 ---------------
