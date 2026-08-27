@@ -71,7 +71,8 @@ tasks.register('installKernelSpec', Sync) {
     into kernelInstallDir()
     doLast {
         def dir = kernelInstallDir()
-        def javaExe = "${System.getProperty('java.home')}/bin/java"
+        // override with -PjavaHome=/path/to/jdk to pin a different JVM into the kernelspec
+        def javaExe = "${project.findProperty('javaHome') ?: System.getProperty('java.home')}/bin/java"
         def spec = [
                 argv          : [javaExe, '-cp', "${dir}/lib/*".toString(), 'groovyx.jupyter.GroovyKernelLauncher', '{connection_file}'],
                 display_name  : "Groovy ${groovyVersion}".toString(),

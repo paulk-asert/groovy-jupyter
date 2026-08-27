@@ -70,6 +70,32 @@ class GroovyKernelTest {
     }
 
     @Test
+    void memberCompletionUsesTheMetaClass() {
+        kernel.evalBuilder("txt = 'hello'").resolveMagics().eval();
+        ReplacementOptions jdkMethod = kernel.complete("txt.toUp", 8);
+        assertTrue(jdkMethod.getReplacements().contains("toUpperCase"));
+        assertEquals(4, jdkMethod.getSourceStart());
+
+        ReplacementOptions dgmMethod = kernel.complete("txt.rev", 7);
+        assertTrue(dgmMethod.getReplacements().contains("reverse"));
+    }
+
+    @Test
+    void powerAssertsRenderInErrors() {
+        Throwable caught = org.junit.jupiter.api.Assertions.assertThrows(Throwable.class,
+                () -> kernel.evalBuilder("assert 6 * 7 == 43").resolveMagics().eval());
+        String rendered = String.join("\n", kernel.formatError(caught));
+        assertTrue(rendered.contains("assert 6 * 7 == 43"), rendered);
+        assertTrue(rendered.contains("42"), rendered);
+    }
+
+    @Test
+    void interruptionRendersAsOneFriendlyLine() {
+        String rendered = String.join("\n", kernel.formatError(new InterruptedException()));
+        assertTrue(rendered.contains("Execution interrupted"));
+    }
+
+    @Test
     void isCompleteAnswers() {
         assertEquals(BaseKernel.IS_COMPLETE_YES, kernel.isComplete("println 'hi'"));
         assertEquals("", kernel.isComplete("if (true) {"));

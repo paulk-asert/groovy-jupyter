@@ -19,6 +19,11 @@
 package groovyx.jupyter;
 
 import groovy.lang.GroovySystem;
+import groovy.lang.MetaClass;
+import groovy.lang.MetaMethod;
+import groovy.lang.MetaProperty;
+import org.codehaus.groovy.runtime.InvokerHelper;
+import org.codehaus.groovy.runtime.StackTraceUtils;
 import org.dflib.jjava.jupyter.messages.Header;
 import org.dflib.jjava.jupyter.kernel.BaseKernel;
 import org.dflib.jjava.jupyter.kernel.BaseKernelBuilder;
@@ -39,6 +44,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A Jupyter kernel for the Apache Groovy programming language.
@@ -59,6 +66,12 @@ public class GroovyKernel extends BaseKernel {
             "long", "native", "new", "null", "package", "private", "protected", "public", "record", "return",
             "short", "static", "super", "switch", "synchronized", "this", "throw", "throws", "trait",
             "transient", "true", "try", "var", "void", "volatile", "while");
+
+    // "<binding variable>.<member prefix>" immediately before the cursor
+    private static final Pattern MEMBER_ACCESS =
+            Pattern.compile("([A-Za-z_$][A-Za-z0-9_$]*)\\.([A-Za-z0-9_$]*)$");
+
+    private static final int MAX_TRACE_LINES = 20;
 
     private final GroovyEvaluator evaluator;
 
@@ -101,7 +114,16 @@ public class GroovyKernel extends BaseKernel {
 
     @Override
     protected Object doEval(String source) {
-        Object result = evaluator.eval(source);
+        Object result;
+        try {
+            result = evaluator.eval(source);
+        } catch (Error e) {
+            // The base execute handler catches only Exception; an escaping Error
+            // (AssertionError from a failed power assert, OutOfMemoryError, ...)
+            // would kill the shell-channel loop and hang the kernel. Wrap it so the
+            // normal error path applies; formatError unwraps for display.
+            throw new CellError(e);
+        }
         // Normalize Groovy CharSequence flavors (GString et al.): the base Text renderer
         // registers for CharSequence and puts the raw object into the mime bundle, which
         // Gson would serialize structurally (GStringImpl internals) instead of as text.
@@ -111,19 +133,66 @@ public class GroovyKernel extends BaseKernel {
         return result;
     }
 
+    /** Carries a JVM Error out of cell execution as an Exception the base kernel can handle. */
+    public static class CellError extends RuntimeException {
+        public CellError(Error cause) {
+            super(cause.toString(), cause);
+        }
+    }
+
     @Override
     public DisplayData inspect(String code, int at, boolean extraDetail) {
         return null; // later phase
     }
 
     @Override
+    public void interrupt() {
+        evaluator.interruptEval();
+    }
+
+    @Override
+    protected List<String> formatError(Throwable e) {
+        if (e instanceof InterruptedException) {
+            return List.of(errorStyler.secondary("Execution interrupted."));
+        }
+        if (e instanceof CellError && e.getCause() != null) {
+            e = e.getCause();
+        }
+        Throwable sanitized = StackTraceUtils.deepSanitize(e);
+        List<String> lines = new ArrayList<>(
+                // multi-line messages (power asserts!) render as the primary block
+                errorStyler.primaryLines(sanitized.getClass().getSimpleName()
+                        + (sanitized.getMessage() != null ? ": " + sanitized.getMessage() : "")));
+        for (StackTraceElement frame : sanitized.getStackTrace()) {
+            String cls = frame.getClassName();
+            if (cls.startsWith("groovyx.jupyter.") || cls.startsWith("org.dflib.jjava.")) {
+                break; // kernel plumbing is noise to a notebook user
+            }
+            lines.add(errorStyler.secondary("at " + frame));
+            if (lines.size() >= MAX_TRACE_LINES) {
+                lines.add(errorStyler.secondary("..."));
+                break;
+            }
+        }
+        Throwable cause = sanitized.getCause();
+        if (cause != null && cause != sanitized) {
+            lines.add(errorStyler.secondary("Caused by: " + cause));
+        }
+        return lines;
+    }
+
+    @Override
     public ReplacementOptions complete(String code, int at) {
+        ReplacementOptions members = completeMember(code, at);
+        if (members != null) {
+            return members;
+        }
         int start = at;
         while (start > 0 && Character.isJavaIdentifierPart(code.charAt(start - 1))) {
             start--;
         }
         if (start == at || (start > 0 && code.charAt(start - 1) == '.')) {
-            // no prefix, or member completion after a dot: not supported yet
+            // no prefix, or a dot-completion we couldn't resolve to a binding variable
             return null;
         }
         String prefix = code.substring(start, at);
@@ -140,6 +209,45 @@ public class GroovyKernel extends BaseKernel {
             }
         }
         return matches.isEmpty() ? null : new ReplacementOptions(new ArrayList<>(matches), start, at);
+    }
+
+    /**
+     * Member completion for {@code bindingVar.<prefix>}: offers the runtime
+     * metaclass's methods and properties (including Groovy extension methods).
+     */
+    private ReplacementOptions completeMember(String code, int at) {
+        Matcher m = MEMBER_ACCESS.matcher(code.substring(0, at));
+        if (!m.find()) {
+            return null;
+        }
+        String varName = m.group(1);
+        String prefix = m.group(2);
+        if (!evaluator.getBinding().hasVariable(varName)) {
+            return null;
+        }
+        Object value = evaluator.getBinding().getVariable(varName);
+        if (value == null) {
+            return null;
+        }
+        MetaClass metaClass = InvokerHelper.getMetaClass(value);
+        Set<String> matches = new TreeSet<>();
+        for (MetaMethod method : metaClass.getMethods()) {
+            addMatch(matches, method.getName(), prefix);
+        }
+        for (MetaMethod method : metaClass.getMetaMethods()) {
+            addMatch(matches, method.getName(), prefix);
+        }
+        for (MetaProperty property : metaClass.getProperties()) {
+            addMatch(matches, property.getName(), prefix);
+        }
+        return matches.isEmpty() ? null
+                : new ReplacementOptions(new ArrayList<>(matches), at - prefix.length(), at);
+    }
+
+    private static void addMatch(Set<String> matches, String name, String prefix) {
+        if (name.startsWith(prefix) && !name.contains("$")) {
+            matches.add(name);
+        }
     }
 
     @Override

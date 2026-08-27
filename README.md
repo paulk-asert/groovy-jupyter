@@ -19,13 +19,17 @@ groovy-jupyter
 
 A [Jupyter](https://jupyter.org/) kernel for [Apache Groovy](https://groovy.apache.org/)&trade;.
 
-Status: **phase 0 spike — a working minimal kernel**: execute with streamed
-output and text results, session state (undeclared variables, classes, methods,
-imports) persisting across cells, `@Grab` backed by Groovy 6's maven-resolver
-Grape engine, and basic completion / is_complete — verified end-to-end over the
-Jupyter wire protocol. The wider plan is still being socialized with the Groovy
-community; design decisions below are proposals, not commitments. The full
-plan-of-attack assessment is recorded in
+Status: **phase 1 — session semantics and interrupts**: everything from the
+phase-0 spike (execute, streamed output, text results, `@Grab` on Groovy 6's
+maven-resolver Grape engine) plus: `def`/typed declarations now persist across
+cells (declaration lifting), **interrupt actually stops runaway cell loops**
+(cells compile with `ThreadInterrupt`), readable errors with power-assert
+rendering and sanitized stack traces, member completion on binding variables
+via the metaclass, stdin support, and an optional class-output directory
+(`GROOVY_JUPYTER_CLASS_DIR`) for Spark class-shipping and bytecode inspection —
+all verified end-to-end over the Jupyter wire protocol. The wider plan is still
+being socialized with the Groovy community; design decisions below are
+proposals, not commitments. The full plan-of-attack assessment is recorded in
 [docs/assessment.html](docs/assessment.html).
 
 Getting started
@@ -42,9 +46,10 @@ installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
 directory. Then pick "Groovy" as the kernel in your frontend, or run
 `jupyter console --kernel groovy`.
 
-Phase 0 limitations: `def`/typed declarations are cell-local — use undeclared
-(binding) variables for session state, as in the classic BeakerX style;
-no interrupt support yet; results render as text only.
+Current limitations: results render as text only (rich mime display is the
+next phase); interrupts are cooperative — loops inside third-party jars can't
+be stopped (restart the kernel); tuple declarations (`def (a, b) = ...`) stay
+cell-local; completion doesn't yet chain through expressions.
 
 Design sketch
 -------------

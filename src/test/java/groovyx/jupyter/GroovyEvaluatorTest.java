@@ -18,13 +18,20 @@
  */
 package groovyx.jupyter;
 
-import groovy.lang.MissingPropertyException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GroovyEvaluatorTest {
 
@@ -78,11 +85,99 @@ class GroovyEvaluatorTest {
     }
 
     @Test
-    void defDeclarationsAreCellLocalInPhase0() {
-        // Phase 0 documents script semantics: def makes a local that evaporates.
-        // Declaration lifting (a later phase) will change this.
+    void defDeclarationsAreLiftedToTheSession() {
         evaluator.eval("def y = 10");
-        assertThrows(MissingPropertyException.class, () -> evaluator.eval("y"));
+        assertEquals(11, evaluator.eval("y + 1"));
+    }
+
+    @Test
+    void typedDeclarationsAreLiftedWithCoercion() {
+        evaluator.eval("long total = 5");
+        assertEquals("Long", evaluator.eval("total.class.simpleName"));
+        assertEquals(6L, evaluator.eval("total + 1"));
+    }
+
+    @Test
+    void declarationsWithoutInitializerGetDefaults() {
+        evaluator.eval("def z");
+        assertEquals(true, evaluator.eval("z == null"));
+        evaluator.eval("int k");
+        assertEquals(0, evaluator.eval("k"));
+    }
+
+    @Test
+    void nestedDeclarationsStayLocal() {
+        evaluator.eval("if (true) { def local = 99 }");
+        assertFalse(evaluator.getBinding().hasVariable("local"));
+    }
+
+    @Test
+    void fieldAnnotatedDeclarationsAreNotLifted() {
+        assertEquals(14, evaluator.eval("@groovy.transform.Field int fx = 7\nfx * 2"));
+    }
+
+    @Test
+    void tupleDeclarationsRemainCellLocal() {
+        assertEquals(3, evaluator.eval("def (a, b) = [1, 2]\na + b"));
+        assertFalse(evaluator.getBinding().hasVariable("a"));
+    }
+
+    @Test
+    void closuresCaptureLiftedVariables() {
+        evaluator.eval("def base = 40");
+        evaluator.eval("addTwo = { base + 2 }");
+        assertEquals(42, evaluator.eval("addTwo()"));
+    }
+
+    @Test
+    void recordsPersistAcrossCells() {
+        evaluator.eval("record Pt(int x, int y) {}");
+        assertEquals(5, evaluator.eval("new Pt(1, 2).x + new Pt(3, 4).y"));
+    }
+
+    @Test
+    void interfacesAndCoercionsWorkAcrossCells() {
+        evaluator.eval("interface Greeter { String greet(String n) }");
+        assertEquals("hi groovy", evaluator.eval("g = { n -> 'hi ' + n } as Greeter\ng.greet('groovy')"));
+    }
+
+    @Test
+    void annotatedMethodsPersistAcrossCells() {
+        evaluator.eval("import java.lang.annotation.*\n"
+                + "@Retention(RetentionPolicy.RUNTIME) @interface Doc { String value() }");
+        evaluator.eval("@Doc('adds') int add2(int a, int b) { a + b }");
+        assertEquals(42, evaluator.eval("add2(20, 22)"));
+    }
+
+    @Test
+    @Timeout(30)
+    void interruptStopsHotLoop() throws Exception {
+        AtomicReference<Throwable> thrown = new AtomicReference<>();
+        Thread runner = new Thread(() -> {
+            try {
+                evaluator.eval("i = 0\nwhile (true) { i++ }");
+            } catch (Throwable t) {
+                thrown.set(t);
+            }
+        });
+        runner.start();
+        Thread.sleep(800);
+        evaluator.interruptEval();
+        runner.join(10_000);
+        assertFalse(runner.isAlive());
+        assertInstanceOf(InterruptedException.class, thrown.get());
+    }
+
+    @Test
+    void classOutputDirWritesCellClasses(@TempDir Path dir) {
+        System.setProperty("groovy.jupyter.classOutputDir", dir.toString());
+        try {
+            GroovyEvaluator dumping = new GroovyEvaluator();
+            dumping.eval("class Dumped { int v }");
+            assertTrue(Files.exists(dir.resolve("Dumped.class")));
+        } finally {
+            System.clearProperty("groovy.jupyter.classOutputDir");
+        }
     }
 
     @Test

@@ -21,14 +21,17 @@ package groovyx.jupyter;
 import groovy.lang.Binding;
 import groovy.lang.GroovyClassLoader;
 import groovy.lang.Script;
+import groovy.transform.ThreadInterrupt;
 import org.codehaus.groovy.control.CompilationFailedException;
 import org.codehaus.groovy.control.CompilationUnit;
 import org.codehaus.groovy.control.CompilerConfiguration;
 import org.codehaus.groovy.control.Phases;
+import org.codehaus.groovy.control.customizers.ASTTransformationCustomizer;
 import org.codehaus.groovy.control.customizers.ImportCustomizer;
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.codehaus.groovy.runtime.MethodClosure;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.LinkedHashSet;
@@ -43,16 +46,23 @@ import java.util.regex.Pattern;
  * <p>
  * Session semantics (phase 0):
  * <ul>
- *   <li>undeclared assignments ({@code x = 1}) go to the shared binding and persist across cells;</li>
+ *   <li>undeclared assignments ({@code x = 1}) AND top-level declarations
+ *       ({@code def x = 1}, {@code int x = 1} — lifted by {@link DeclarationLifting})
+ *       go to the shared binding and persist across cells;</li>
  *   <li>classes defined in a cell persist (they live in the session classloader);</li>
  *   <li>methods defined in a cell persist: they are registered in the binding as
  *       {@link MethodClosure}s, and Groovy's script method-missing fallback dispatches
  *       later calls to them;</li>
  *   <li>top-level imports are accumulated and re-applied to subsequent cells;</li>
- *   <li>{@code def}/typed declarations are script-locals and do NOT persist yet
- *       (declaration lifting is a later phase);</li>
  *   <li>{@code @Grab} resolves into the session classloader, so grabbed dependencies
- *       are session-wide.</li>
+ *       are session-wide;</li>
+ *   <li>every cell is compiled with {@link ThreadInterrupt}, so a kernel interrupt
+ *       actually stops runaway loops in cell code (loops inside third-party jars
+ *       remain uninterruptible — restart the kernel for those);</li>
+ *   <li>if the {@code groovy.jupyter.classOutputDir} system property or
+ *       {@code GROOVY_JUPYTER_CLASS_DIR} environment variable is set, compiled cell
+ *       classes are also written there (e.g. for Spark's
+ *       {@code spark.repl.class.outputDir} class-shipping, or bytecode inspection).</li>
  * </ul>
  */
 public class GroovyEvaluator {
@@ -69,6 +79,8 @@ public class GroovyEvaluator {
     private final ImportCustomizer imports = new ImportCustomizer();
     private final Set<String> knownImports = new LinkedHashSet<>();
     private final AtomicInteger cellCounter = new AtomicInteger();
+    private final Object evalLock = new Object();
+    private Thread evalThread;
 
     public GroovyEvaluator() {
         this(GroovyEvaluator.class.getClassLoader());
@@ -76,7 +88,17 @@ public class GroovyEvaluator {
 
     public GroovyEvaluator(ClassLoader parent) {
         CompilerConfiguration config = new CompilerConfiguration();
-        config.addCompilationCustomizers(imports);
+        config.addCompilationCustomizers(
+                imports,
+                new DeclarationLifting(),
+                new ASTTransformationCustomizer(ThreadInterrupt.class));
+        String classDir = System.getProperty("groovy.jupyter.classOutputDir",
+                System.getenv("GROOVY_JUPYTER_CLASS_DIR"));
+        if (classDir != null && !classDir.isBlank()) {
+            File dir = new File(classDir);
+            dir.mkdirs();
+            config.setTargetDirectory(dir);
+        }
         this.loader = new GroovyClassLoader(parent, config);
     }
 
@@ -95,16 +117,40 @@ public class GroovyEvaluator {
      * classloader without running anything.
      */
     public Object eval(String source) {
-        Class<?> parsed = loader.parseClass(source, "Cell" + cellCounter.incrementAndGet() + ".groovy");
-        Object result = null;
-        if (Script.class.isAssignableFrom(parsed)) {
-            Script script = (Script) InvokerHelper.createScript(parsed, binding);
-            result = script.run();
-            registerCellMethods(script, parsed);
+        synchronized (evalLock) {
+            evalThread = Thread.currentThread();
         }
-        // only remember imports from cells that compiled (and, for scripts, ran)
-        rememberImports(source);
-        return result;
+        try {
+            Class<?> parsed = loader.parseClass(source, "Cell" + cellCounter.incrementAndGet() + ".groovy");
+            Object result = null;
+            if (Script.class.isAssignableFrom(parsed)) {
+                Script script = (Script) InvokerHelper.createScript(parsed, binding);
+                result = script.run();
+                registerCellMethods(script, parsed);
+            }
+            // only remember imports from cells that compiled (and, for scripts, ran)
+            rememberImports(source);
+            return result;
+        } finally {
+            synchronized (evalLock) {
+                evalThread = null;
+            }
+            // don't leak a pending interrupt into the channel loop / next cell
+            Thread.interrupted();
+        }
+    }
+
+    /**
+     * Interrupts the currently executing cell, if any. Cell code is compiled with
+     * {@link ThreadInterrupt}, so loops and method entries in cell-defined code
+     * observe the interrupt and abort with an InterruptedException.
+     */
+    public void interruptEval() {
+        synchronized (evalLock) {
+            if (evalThread != null) {
+                evalThread.interrupt();
+            }
+        }
     }
 
     /**
