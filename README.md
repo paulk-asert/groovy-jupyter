@@ -19,11 +19,32 @@ groovy-jupyter
 
 A [Jupyter](https://jupyter.org/) kernel for [Apache Groovy](https://groovy.apache.org/)&trade;.
 
-Status: **early design/incubation — no working kernel yet**.
-The plan is being assessed and socialized with the Groovy community;
-design decisions below are proposals, not commitments.
-The full plan-of-attack assessment is recorded in
+Status: **phase 0 spike — a working minimal kernel**: execute with streamed
+output and text results, session state (undeclared variables, classes, methods,
+imports) persisting across cells, `@Grab` backed by Groovy 6's maven-resolver
+Grape engine, and basic completion / is_complete — verified end-to-end over the
+Jupyter wire protocol. The wider plan is still being socialized with the Groovy
+community; design decisions below are proposals, not commitments. The full
+plan-of-attack assessment is recorded in
 [docs/assessment.html](docs/assessment.html).
+
+Getting started
+---------------
+
+Requires JDK 17+ (kernelspec records the installing JVM) and any Jupyter
+frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`).
+
+```
+./gradlew installKernelSpec
+```
+
+installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
+directory. Then pick "Groovy" as the kernel in your frontend, or run
+`jupyter console --kernel groovy`.
+
+Phase 0 limitations: `def`/typed declarations are cell-local — use undeclared
+(binding) variables for session state, as in the classic BeakerX style;
+no interrupt support yet; results render as text only.
 
 Design sketch
 -------------
