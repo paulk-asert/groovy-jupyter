@@ -19,15 +19,18 @@ groovy-jupyter
 
 A [Jupyter](https://jupyter.org/) kernel for [Apache Groovy](https://groovy.apache.org/)&trade;.
 
-Status: **phase 1 — session semantics and interrupts**: everything from the
-phase-0 spike (execute, streamed output, text results, `@Grab` on Groovy 6's
-maven-resolver Grape engine) plus: `def`/typed declarations now persist across
-cells (declaration lifting), **interrupt actually stops runaway cell loops**
-(cells compile with `ThreadInterrupt`), readable errors with power-assert
-rendering and sanitized stack traces, member completion on binding variables
-via the metaclass, stdin support, and an optional class-output directory
-(`GROOVY_JUPYTER_CLASS_DIR`) for Spark class-shipping and bytecode inspection —
-all verified end-to-end over the Jupyter wire protocol. The wider plan is still
+Status: **phase 2 — rich display**: everything from phases 0–1 (execute,
+session semantics incl. `def` lifting, `@Grab` on Groovy 6's maven-resolver
+Grape engine, working interrupts, power-assert error rendering, member
+completion, stdin, class-output dir) plus: **`List<Map>` rows, `Map`s and GINQ
+query results render as HTML tables automatically** (with plain-text fallbacks);
+cell-facing display helpers (`display`, `displayHtml`, `displaySvg`,
+`displayMarkdown`, `displayPng`, plus `updateDisplay`/`updateSvg`/... for
+in-place updates — the streaming-output primitive); `groovy-ginq` and
+`groovy-csv` ship with the kernel; and **renderer extensions self-register from
+`@Grab`-ed jars** via the base kernel's ServiceLoader `Extension` SPI (the
+session classloader is rescanned when grabs grow the classpath) — all verified
+end-to-end over the Jupyter wire protocol. The wider plan is still
 being socialized with the Groovy community; design decisions below are
 proposals, not commitments. The full plan-of-attack assessment is recorded in
 [docs/assessment.html](docs/assessment.html).
@@ -46,10 +49,11 @@ installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
 directory. Then pick "Groovy" as the kernel in your frontend, or run
 `jupyter console --kernel groovy`.
 
-Current limitations: results render as text only (rich mime display is the
-next phase); interrupts are cooperative — loops inside third-party jars can't
-be stopped (restart the kernel); tuple declarations (`def (a, b) = ...`) stay
-cell-local; completion doesn't yet chain through expressions.
+Current limitations: interrupts are cooperative — loops inside third-party
+jars can't be stopped (restart the kernel); tuple declarations
+(`def (a, b) = ...`) stay cell-local; completion doesn't yet chain through
+expressions; no `%magics` beyond the design intent that `@Grab` covers
+dependency needs.
 
 Design sketch
 -------------

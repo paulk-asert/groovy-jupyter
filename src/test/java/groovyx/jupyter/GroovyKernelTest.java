@@ -110,6 +110,77 @@ class GroovyKernelTest {
     }
 
     @Test
+    void listOfMapsRendersAsHtmlTable() {
+        Object rows = kernel.evalBuilder("[[name: 'a', v: 1], [name: 'b', v: 2]]").resolveMagics().eval();
+        DisplayData out = kernel.getRenderer().render(rows);
+        String html = String.valueOf(out.getData(MIMEType.parse("text/html")));
+        assertTrue(html.contains("<table"), html);
+        assertTrue(html.contains("<th>name</th>"), html);
+        assertTrue(html.contains("<td>2</td>"), html);
+        assertTrue(out.hasDataForType(MIMEType.TEXT_PLAIN)); // console fallback kept
+    }
+
+    @Test
+    void mapsRenderAsKeyValueTable() {
+        Object counts = kernel.evalBuilder("[alpha: 1, beta: 2]").resolveMagics().eval();
+        String html = String.valueOf(kernel.getRenderer().render(counts).getData(MIMEType.parse("text/html")));
+        assertTrue(html.contains("<td>alpha</td>"), html);
+        assertTrue(html.contains("<td>2</td>"), html);
+    }
+
+    @Test
+    void tableCellsAreHtmlEscaped() {
+        Object rows = kernel.evalBuilder("[[snippet: '<script>alert(1)</script>']]").resolveMagics().eval();
+        String html = String.valueOf(kernel.getRenderer().render(rows).getData(MIMEType.parse("text/html")));
+        assertTrue(html.contains("&lt;script&gt;"), html);
+        assertTrue(!html.contains("<script>"), html);
+    }
+
+    @Test
+    void plainListsStayTextOnly() {
+        Object list = kernel.evalBuilder("[1, 2, 3]").resolveMagics().eval();
+        DisplayData out = kernel.getRenderer().render(list);
+        assertTrue(!out.hasDataForType(MIMEType.parse("text/html")));
+        assertEquals("[1, 2, 3]", out.getData(MIMEType.TEXT_PLAIN));
+    }
+
+    @Test
+    void ginqResultsRenderAsHtmlTable() {
+        Object queryable = kernel.evalBuilder("GQ { from n in [2, 3] select n, n * n }")
+                .resolveMagics().eval();
+        String html = String.valueOf(kernel.getRenderer().render(queryable).getData(MIMEType.parse("text/html")));
+        assertTrue(html.contains("<table"), html);
+        assertTrue(html.contains("<td>9</td>"), html);
+    }
+
+    @Test
+    void grabbedExtensionsAreInstalledWhenClasspathGrows(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir)
+            throws Exception {
+        // compile an Extension implementation into a directory, services file included,
+        // then simulate a grab by adding that directory to the session classloader
+        org.codehaus.groovy.control.CompilerConfiguration config = new org.codehaus.groovy.control.CompilerConfiguration();
+        config.setTargetDirectory(dir.toFile());
+        try (groovy.lang.GroovyClassLoader compiler = new groovy.lang.GroovyClassLoader(getClass().getClassLoader(), config)) {
+            compiler.parseClass(
+                    "class TestExt implements org.dflib.jjava.jupyter.Extension {\n"
+                            + "    void install(org.dflib.jjava.jupyter.kernel.BaseKernel k) {\n"
+                            + "        System.setProperty('groovyx.jupyter.testExt', 'installed')\n"
+                            + "    }\n"
+                            + "}", "TestExt.groovy");
+        }
+        java.nio.file.Path services = dir.resolve("META-INF/services");
+        java.nio.file.Files.createDirectories(services);
+        java.nio.file.Files.writeString(services.resolve("org.dflib.jjava.jupyter.Extension"), "TestExt\n");
+        try {
+            kernel.getEvaluator().getClassLoader().addURL(dir.toUri().toURL());
+            kernel.evalBuilder("1 + 1").resolveMagics().eval();
+            assertEquals("installed", System.getProperty("groovyx.jupyter.testExt"));
+        } finally {
+            System.clearProperty("groovyx.jupyter.testExt");
+        }
+    }
+
+    @Test
     void languageInfoDescribesGroovy() {
         assertEquals("groovy", kernel.getLanguageInfo().getName());
         assertEquals(".groovy", kernel.getLanguageInfo().getFileExtension());

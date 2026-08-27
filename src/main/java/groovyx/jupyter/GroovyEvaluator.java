@@ -88,6 +88,8 @@ public class GroovyEvaluator {
 
     public GroovyEvaluator(ClassLoader parent) {
         CompilerConfiguration config = new CompilerConfiguration();
+        // cell-facing display helpers available without imports
+        imports.addStaticStars("groovyx.jupyter.Notebook");
         config.addCompilationCustomizers(
                 imports,
                 new DeclarationLifting(),

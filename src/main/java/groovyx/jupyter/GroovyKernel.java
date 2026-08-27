@@ -74,6 +74,7 @@ public class GroovyKernel extends BaseKernel {
     private static final int MAX_TRACE_LINES = 20;
 
     private final GroovyEvaluator evaluator;
+    private int knownLoaderUrlCount = -1;
 
     protected GroovyKernel(
             String name,
@@ -92,6 +93,7 @@ public class GroovyKernel extends BaseKernel {
         super(name, version, languageInfo, helpLinks, historyManager, io, commManager, renderer,
                 magicsResolver, magicsRegistry, extensionsEnabled, errorStyler);
         this.evaluator = evaluator;
+        GroovyDisplays.registerAll(renderer);
     }
 
     public static Builder builder() {
@@ -124,6 +126,9 @@ public class GroovyKernel extends BaseKernel {
             // normal error path applies; formatError unwraps for display.
             throw new CellError(e);
         }
+        // A grab may have grown the session classpath: newly reachable Extension
+        // services (renderer SPI jars) get installed, idempotently.
+        rescanExtensionsIfClasspathGrew();
         // Normalize Groovy CharSequence flavors (GString et al.): the base Text renderer
         // registers for CharSequence and puts the raw object into the mime bundle, which
         // Gson would serialize structurally (GStringImpl internals) instead of as text.
@@ -131,6 +136,17 @@ public class GroovyKernel extends BaseKernel {
             return result.toString();
         }
         return result;
+    }
+
+    private void rescanExtensionsIfClasspathGrew() {
+        if (!extensionsEnabled) {
+            return;
+        }
+        int urlCount = evaluator.getClassLoader().getURLs().length;
+        if (urlCount != knownLoaderUrlCount) {
+            knownLoaderUrlCount = urlCount;
+            installExtensions(evaluator.getClassLoader());
+        }
     }
 
     /** Carries a JVM Error out of cell execution as an Exception the base kernel can handle. */
