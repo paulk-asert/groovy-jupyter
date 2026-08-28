@@ -32,7 +32,10 @@ import org.codehaus.groovy.runtime.InvokerHelper;
 import org.codehaus.groovy.runtime.MethodClosure;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.URL;
+import java.util.Enumeration;
 import java.lang.reflect.Modifier;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -86,6 +89,90 @@ public class GroovyEvaluator {
         this(GroovyEvaluator.class.getClassLoader());
     }
 
+    /**
+     * Package prefixes the session shares with the kernel classpath. Everything
+     * else on the kernel classpath (Jackson, Gson, JeroMQ, slf4j, ...) is an
+     * implementation detail kept invisible to cells, so {@code @Grab}bed libraries
+     * bring their own versions without parent-first conflicts (e.g. Spark's
+     * jackson-module-scala vs the Jackson that groovy-csv uses internally).
+     */
+    private static final String[] SHARED_PREFIXES = {
+            "groovy.", "org.codehaus.groovy.", "org.apache.groovy.",
+            "groovyx.jupyter.", "org.dflib.jjava.jupyter."
+    };
+
+    /**
+     * Parent for the session classloader: shares only {@link #SHARED_PREFIXES}
+     * classes with the kernel. Resources delegate fully (Groovy extension-module
+     * and ServiceLoader discovery for the shipped modules relies on them).
+     */
+    static final class SessionParentClassLoader extends ClassLoader {
+
+        private final ClassLoader kernelLoader;
+
+        SessionParentClassLoader(ClassLoader kernelLoader) {
+            super(null);
+            this.kernelLoader = kernelLoader;
+        }
+
+        @Override
+        protected Class<?> findClass(String name) throws ClassNotFoundException {
+            // the whole JDK first (platform loader covers every JDK module —
+            // java.sql, org.ietf.jgss, jdk.incubator, ... — without package lists)
+            try {
+                return ClassLoader.getPlatformClassLoader().loadClass(name);
+            } catch (ClassNotFoundException ignored) {
+                // not a JDK class; fall through to the shared kernel packages
+            }
+            for (String prefix : SHARED_PREFIXES) {
+                if (name.startsWith(prefix)) {
+                    return kernelLoader.loadClass(name);
+                }
+            }
+            throw new ClassNotFoundException(name);
+        }
+
+        @Override
+        public URL getResource(String name) {
+            return sharedResource(name) ? kernelLoader.getResource(name) : null;
+        }
+
+        @Override
+        public Enumeration<URL> getResources(String name) throws IOException {
+            return sharedResource(name) ? kernelLoader.getResources(name)
+                    : java.util.Collections.emptyEnumeration();
+        }
+
+        /**
+         * Resources follow the class-visibility rules, or ServiceLoader-driven
+         * lookups (run with the session TCCL) would discover provider files whose
+         * classes are hidden — e.g. the JDK's XMLInputFactory FactoryFinder seeing
+         * a kernel-internal Woodstox registration it can't instantiate. Only
+         * Groovy/kernel-owned service registrations and shared-package resources
+         * are delegated; JDK factories then fall back to their platform defaults.
+         */
+        private static boolean sharedResource(String name) {
+            if (name.startsWith("META-INF/services/")) {
+                String service = name.substring("META-INF/services/".length());
+                return service.startsWith("groovy.")
+                        || service.startsWith("org.codehaus.groovy.")
+                        || service.startsWith("org.apache.groovy.")
+                        || service.startsWith("groovyx.jupyter.")
+                        || service.startsWith("org.dflib.jjava.jupyter.");
+            }
+            if (name.startsWith("META-INF/groovy/")) {
+                return true; // extension-module descriptors of the shipped modules
+            }
+            String dotted = name.replace('/', '.');
+            for (String prefix : SHARED_PREFIXES) {
+                if (dotted.startsWith(prefix)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     public GroovyEvaluator(ClassLoader parent) {
         CompilerConfiguration config = new CompilerConfiguration();
         // cell-facing display helpers available without imports
@@ -101,7 +188,7 @@ public class GroovyEvaluator {
             dir.mkdirs();
             config.setTargetDirectory(dir);
         }
-        this.loader = new GroovyClassLoader(parent, config);
+        this.loader = new GroovyClassLoader(new SessionParentClassLoader(parent), config);
     }
 
     public Binding getBinding() {
@@ -122,6 +209,11 @@ public class GroovyEvaluator {
         synchronized (evalLock) {
             evalThread = Thread.currentThread();
         }
+        // TCCL must be the session classloader while cell code runs: grabbed
+        // libraries that use ServiceLoader/TCCL discovery (Spark's SparkSession
+        // facade, JDBC DriverManager, logging bindings, ...) look there
+        ClassLoader previousContextLoader = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(loader);
         try {
             Class<?> parsed = loader.parseClass(source, "Cell" + cellCounter.incrementAndGet() + ".groovy");
             Object result = null;
@@ -134,6 +226,7 @@ public class GroovyEvaluator {
             rememberImports(source);
             return result;
         } finally {
+            Thread.currentThread().setContextClassLoader(previousContextLoader);
             synchronized (evalLock) {
                 evalThread = null;
             }

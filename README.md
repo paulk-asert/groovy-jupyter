@@ -56,7 +56,9 @@ frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`).
 installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
 directory. Then pick "Groovy" as the kernel in your frontend, or run
 `jupyter console --kernel groovy`. To pin a specific JVM (e.g. JDK 25) into
-the kernelspec, pass `-PjavaHome=/path/to/jdk`.
+the kernelspec, pass `-PjavaHome=/path/to/jdk`; extra JVM flags go in
+`-PjvmArgs='--add-opens=... -Dfoo=bar'` (needed e.g. for Spark Connect/Arrow
+or the Vector API — the Spark notebooks document the exact flags).
 
 For a Gradle-free install on another machine: `./gradlew kernelSpecZip`
 produces `build/distributions/groovy-jupyter-kernelspec-<version>.zip`; unzip

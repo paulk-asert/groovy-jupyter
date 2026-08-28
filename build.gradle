@@ -38,7 +38,9 @@ dependencies {
     // which further modules (json, sql, ...) ship by default is pending team review
     runtimeOnly "org.apache.groovy:groovy-csv:${groovyVersion}"
     runtimeOnly "org.apache.groovy:groovy-ginq:${groovyVersion}"
-    runtimeOnly 'org.slf4j:slf4j-jdk14:2.0.17'
+    // slf4j-simple, NOT slf4j-jdk14: grabbed libraries that install the JUL->SLF4J
+    // bridge (Spark does) would loop infinitely with a JUL-bound slf4j (StackOverflowError)
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.17'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -97,8 +99,9 @@ tasks.register('kernelSpecZip', Zip) {
 tasks.register('installKernelSpec', Sync) {
     description = 'Installs the Groovy kernelspec (jars + kernel.json) into the per-user Jupyter kernels directory'
     group = 'distribution'
-    // kernel.json is written in doLast, so a JVM change must defeat up-to-date checking
+    // kernel.json is written in doLast, so a JVM/args change must defeat up-to-date checking
     inputs.property('javaHome', project.findProperty('javaHome') ?: System.getProperty('java.home'))
+    inputs.property('jvmArgs', project.findProperty('jvmArgs') ?: '')
     from(tasks.jar) { into 'lib' }
     from(configurations.runtimeClasspath) { into 'lib' }
     into kernelInstallDir()
@@ -106,8 +109,11 @@ tasks.register('installKernelSpec', Sync) {
         def dir = kernelInstallDir()
         // override with -PjavaHome=/path/to/jdk to pin a different JVM into the kernelspec
         def javaExe = "${project.findProperty('javaHome') ?: System.getProperty('java.home')}/bin/java"
+        // extra JVM flags via -PjvmArgs='--add-opens=... -Dfoo=bar' (space-separated) —
+        // needed e.g. for Arrow/Spark Connect (java.nio opens) or the Vector API
+        def extraArgs = ((project.findProperty('jvmArgs') ?: '') as String).tokenize(' ')
         def spec = [
-                argv          : [javaExe, '-cp', "${dir}/lib/*".toString(), 'groovyx.jupyter.GroovyKernelLauncher', '{connection_file}'],
+                argv          : ([javaExe] + extraArgs + ['-cp', "${dir}/lib/*".toString(), 'groovyx.jupyter.GroovyKernelLauncher', '{connection_file}']),
                 display_name  : "Groovy ${groovyVersion}".toString(),
                 language      : 'groovy',
                 interrupt_mode: 'message',

@@ -169,6 +169,29 @@ class GroovyEvaluatorTest {
     }
 
     @Test
+    void kernelImplementationDependenciesAreHiddenFromCells() {
+        Object visibility = evaluator.eval(
+                "try { Class.forName('com.fasterxml.jackson.databind.ObjectMapper', false, this.class.classLoader); 'visible' }\n"
+                        + "catch (ClassNotFoundException e) { 'hidden' }");
+        assertEquals("hidden", visibility);
+    }
+
+    @Test
+    void shippedGroovyModulesStillWorkOverHiddenDependencies() {
+        // groovy-csv is cell-visible and internally links its (hidden) Jackson
+        assertEquals(1, evaluator.eval(
+                "new groovy.csv.CsvSlurper().parseText('a,b\\n1,2').size()"));
+    }
+
+    @Test
+    void contextClassLoaderIsTheSessionLoaderDuringEval() {
+        Object tccl = evaluator.eval("Thread.currentThread().contextClassLoader");
+        assertEquals(evaluator.getClassLoader(), tccl);
+        // and restored afterwards
+        assertEquals(getClass().getClassLoader(), Thread.currentThread().getContextClassLoader());
+    }
+
+    @Test
     void classOutputDirWritesCellClasses(@TempDir Path dir) {
         System.setProperty("groovy.jupyter.classOutputDir", dir.toString());
         try {
