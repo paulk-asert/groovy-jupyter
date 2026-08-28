@@ -39,6 +39,13 @@ public final class GroovyKernelLauncher {
             System.exit(2);
         }
 
+        // default kernel-side logging (slf4j-simple) to warn — INFO chatter from
+        // Grape's maven-resolver etc. otherwise floods notebook stderr; users can
+        // override with -Dorg.slf4j.simpleLogger.defaultLogLevel=info in jvmArgs
+        if (System.getProperty("org.slf4j.simpleLogger.defaultLogLevel") == null) {
+            System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn");
+        }
+
         String connectionFile = Files.readString(Path.of(args[0]));
         KernelConnectionProperties connProps = KernelConnectionProperties.parse(connectionFile);
         JupyterConnection connection = new JupyterConnection(connProps);
