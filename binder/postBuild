@@ -20,9 +20,13 @@
 # The build itself runs on the apt-provided JDK; the kernel runs on Temurin 25.
 set -euxo pipefail
 
-# JDK 25 for the kernel runtime
+# JDK 25 for the kernel runtime (arch-aware: x64 on mybinder, aarch64 elsewhere)
+case "$(uname -m)" in
+    aarch64|arm64) JDK_ARCH=aarch64 ;;
+    *)             JDK_ARCH=x64 ;;
+esac
 mkdir -p "$HOME/jdk25"
-curl -fsSL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse" \
+curl -fsSL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/${JDK_ARCH}/jdk/hotspot/normal/eclipse" \
     | tar xz -C "$HOME/jdk25" --strip-components=1
 "$HOME/jdk25/bin/java" -version
 
