@@ -47,7 +47,9 @@ Getting started
 ---------------
 
 Requires JDK 17+ (kernelspec records the installing JVM) and any Jupyter
-frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`).
+frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`) — or
+Apache Zeppelin via its built-in Jupyter bridge
+(see [docs/zeppelin.md](docs/zeppelin.md)).
 
 ```
 ./gradlew installKernelSpec
