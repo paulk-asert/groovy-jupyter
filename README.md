@@ -17,7 +17,12 @@ limitations under the License.
 groovy-jupyter
 ==============
 
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/paulk-asert/groovy-jupyter/main?labpath=notebooks%2Fwhiskey.ipynb)
+
 A [Jupyter](https://jupyter.org/) kernel for [Apache Groovy](https://groovy.apache.org/)&trade;.
+**Try it without installing anything** — the Binder badge above launches
+JupyterLab in your browser with the kernel (Groovy 6 on JDK 25) and the
+example notebooks ready to run.
 
 Status: **phase 2 — rich display**: everything from phases 0–1 (execute,
 session semantics incl. `def` lifting, `@Grab` on Groovy 6's maven-resolver
@@ -47,7 +52,16 @@ frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`).
 
 installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
 directory. Then pick "Groovy" as the kernel in your frontend, or run
-`jupyter console --kernel groovy`.
+`jupyter console --kernel groovy`. To pin a specific JVM (e.g. JDK 25) into
+the kernelspec, pass `-PjavaHome=/path/to/jdk`.
+
+For a Gradle-free install on another machine: `./gradlew kernelSpecZip`
+produces `build/distributions/groovy-jupyter-kernelspec-<version>.zip`; unzip
+it and run `jupyter kernelspec install <unzipped-dir> --user --name groovy`.
+The portable spec launches `java` from the PATH (17+ required).
+
+Migrating notebooks from BeakerX? See the
+[BeakerX migration guide](docs/beakerx-migration.md).
 
 Current limitations: interrupts are cooperative — loops inside third-party
 jars can't be stopped (restart the kernel); tuple declarations

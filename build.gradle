@@ -45,10 +45,10 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
+// compile for the JDK 17 baseline on whatever JDK runs the build
+// (portable across environments like Binder where no JDK 17 toolchain exists)
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
 }
 
 test {
@@ -64,9 +64,41 @@ def kernelInstallDir = {
     file("${base}/kernels/groovy")
 }
 
+// portable kernelspec: relies on Jupyter's {resource_dir} argv substitution and
+// a `java` (17+) on the PATH, so the zip installs anywhere with
+// `jupyter kernelspec install <unzipped-dir> --user --name groovy`
+def portableSpecDir = layout.buildDirectory.dir('portable-kernelspec')
+
+tasks.register('portableKernelJson') {
+    outputs.dir(portableSpecDir)
+    doLast {
+        def spec = [
+                argv          : ['java', '-cp', '{resource_dir}/lib/*', 'groovyx.jupyter.GroovyKernelLauncher', '{connection_file}'],
+                display_name  : "Groovy ${groovyVersion}".toString(),
+                language      : 'groovy',
+                interrupt_mode: 'message',
+                env           : [:]
+        ]
+        def dir = portableSpecDir.get().asFile
+        dir.mkdirs()
+        new File(dir, 'kernel.json').text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(spec))
+    }
+}
+
+tasks.register('kernelSpecZip', Zip) {
+    description = 'Builds a portable kernelspec zip (kernel.json + lib/) installable via jupyter kernelspec install'
+    group = 'distribution'
+    archiveBaseName = 'groovy-jupyter-kernelspec'
+    from(tasks.named('portableKernelJson'))
+    from(tasks.jar) { into 'lib' }
+    from(configurations.runtimeClasspath) { into 'lib' }
+}
+
 tasks.register('installKernelSpec', Sync) {
     description = 'Installs the Groovy kernelspec (jars + kernel.json) into the per-user Jupyter kernels directory'
     group = 'distribution'
+    // kernel.json is written in doLast, so a JVM change must defeat up-to-date checking
+    inputs.property('javaHome', project.findProperty('javaHome') ?: System.getProperty('java.home'))
     from(tasks.jar) { into 'lib' }
     from(configurations.runtimeClasspath) { into 'lib' }
     into kernelInstallDir()

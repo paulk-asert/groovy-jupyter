@@ -1,0 +1,35 @@
+#!/bin/bash
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Binder image build: install the Groovy kernel on a JDK 25 runtime.
+# The build itself runs on the apt-provided JDK; the kernel runs on Temurin 25.
+set -euxo pipefail
+
+# JDK 25 for the kernel runtime
+mkdir -p "$HOME/jdk25"
+curl -fsSL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse" \
+    | tar xz -C "$HOME/jdk25" --strip-components=1
+"$HOME/jdk25/bin/java" -version
+
+# build the kernel and install the kernelspec (records the JDK 25 path)
+./gradlew --no-daemon installKernelSpec -PjavaHome="$HOME/jdk25"
+jupyter kernelspec list
+
+# pre-warm the Grape cache for the headline notebooks so their first cell is fast
+"$HOME/jdk25/bin/java" -cp "$HOME/.local/share/jupyter/kernels/groovy/lib/*" \
+    groovy.ui.GroovyMain binder/prewarm.groovy
