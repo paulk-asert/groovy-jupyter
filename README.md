@@ -24,18 +24,21 @@ A [Jupyter](https://jupyter.org/) kernel for [Apache Groovy](https://groovy.apac
 JupyterLab in your browser with the kernel (Groovy 6 on JDK 25) and the
 example notebooks ready to run.
 
-Status: **phase 2 — rich display**: everything from phases 0–1 (execute,
-session semantics incl. `def` lifting, `@Grab` on Groovy 6's maven-resolver
-Grape engine, working interrupts, power-assert error rendering, member
-completion, stdin, class-output dir) plus: **`List<Map>` rows, `Map`s and GINQ
-query results render as HTML tables automatically** (with plain-text fallbacks);
-cell-facing display helpers (`display`, `displayHtml`, `displaySvg`,
-`displayMarkdown`, `displayPng`, plus `updateDisplay`/`updateSvg`/... for
-in-place updates — the streaming-output primitive); `groovy-ginq` and
-`groovy-csv` ship with the kernel; and **renderer extensions self-register from
-`@Grab`-ed jars** via the base kernel's ServiceLoader `Extension` SPI (the
-session classloader is rescanned when grabs grow the classpath) — all verified
-end-to-end over the Jupyter wire protocol. The wider plan is still
+Status: **phases 0–4 (initial cut) — a working kernel, packaged and
+showcased**. The kernel: execute with session semantics (`def` lifting,
+classes/methods/imports persisting across cells), `@Grab` on Groovy 6's
+maven-resolver Grape engine, **working interrupts** (cells compile with
+`ThreadInterrupt`), power-assert error rendering, member completion, stdin,
+and rich display — `List<Map>` rows, `Map`s and GINQ results render as HTML
+tables automatically; `display`/`displaySvg`/`displayHtml`/... helpers with
+in-place updates; renderer extensions self-register from `@Grab`-ed jars via
+a ServiceLoader SPI; `groovy-csv` and `groovy-ginq` ship with the kernel.
+Runs on **JDK 25**. Packaging: a portable kernelspec zip
+(`./gradlew kernelSpecZip`) and a working
+[Binder deployment](https://mybinder.org/v2/gh/paulk-asert/groovy-jupyter/main?labpath=notebooks%2Fwhiskey.ipynb);
+five example notebooks (clustering, classification, regression, NLP,
+time-series) ported from the BeakerX era, with a
+[migration guide](docs/beakerx-migration.md). The wider plan is still
 being socialized with the Groovy community; design decisions below are
 proposals, not commitments. The full plan-of-attack assessment is recorded in
 [docs/assessment.md](docs/assessment.md).
