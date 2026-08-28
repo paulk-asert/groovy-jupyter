@@ -40,6 +40,13 @@ import java.util.UUID;
  */
 public class Notebook extends BaseNotebookStatics {
 
+    /**
+     * End a cell with {@code HIDDEN} to suppress its output — the
+     * self-documenting equivalent of ending with {@code null} (a null result
+     * publishes nothing), and the successor to BeakerX's {@code OutputCell.HIDDEN}.
+     */
+    public static final Object HIDDEN = null;
+
     protected Notebook() {
     }
 

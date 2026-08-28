@@ -45,6 +45,13 @@ class GroovyKernelTest {
     }
 
     @Test
+    void hiddenConstantSuppressesOutput() {
+        DisplayData out = kernel.evalBuilder("hi = 'there'\nHIDDEN").resolveMagics().renderResults().eval();
+        assertNull(out);
+        assertEquals("there", kernel.getEvaluator().getBinding().getVariable("hi"));
+    }
+
+    @Test
     void gstringResultsRenderAsText() {
         kernel.evalBuilder("who = 'world'").resolveMagics().eval();
         DisplayData out = kernel.evalBuilder("\"hi ${who}\"").resolveMagics().renderResults().eval();

@@ -33,7 +33,7 @@ behave identically here.
 | `%%classpath add mvn`<br>`group artifact version` (one per line) | `@Grab('group:artifact:version')` (one per line), attached to an `import` — see below. **Scope note:** BeakerX's `%%classpath` was session-wide while its `@Grab` was scoped to the declaring cell; here `@Grab` resolves into the persistent session classloader, so it is session-wide — one mechanism covers both. |
 | `%import a.b.C`<br>`%import static a.b.C.*` | Plain `import` / `import static` statements in any cell — imports persist to later cells. |
 | `SomethingDisplayer.register()` (e.g. `tech.tablesaw.beakerx.TablesawDisplayer`) | Delete the line. Libraries self-register renderers via the kernel's ServiceLoader `Extension` mechanism when their jar is grabbed; `List<Map>` rows, `Map`s and GINQ results already render as HTML tables out of the box. |
-| `OutputCell.HIDDEN` | End the cell with `null` (a null result produces no output), or just delete the line. |
+| `OutputCell.HIDDEN` | End the cell with `HIDDEN` (auto-imported — often just delete the `OutputCell.` prefix), or delete the line entirely. Ending with `null` also works: a null result produces no output. |
 | `new Plot(…) << new Points(…)`, `TimePlot`, `Histogram`, `SimpleTimePlot`, … (BeakerX JS widgets) | The one non-mechanical step: produce SVG or HTML instead and pass it through — `displaySvg(svg)` / `displayHtml(html)` — or use a charting library that exports SVG/PNG (XChart, matrix-charts, ECharts-as-HTML). The [ported notebooks](../notebooks/) include hand-rolled SVG scatter plots, histograms, time series and bar charts to copy from. |
 
 ## Gotchas worth knowing
