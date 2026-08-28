@@ -1,0 +1,2 @@
+# No extra Python packages needed: JupyterLab comes from the Binder base image
+# and the Groovy kernel (JVM) is built and installed by postBuild.
