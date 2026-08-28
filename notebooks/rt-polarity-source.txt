@@ -1,0 +1,2 @@
+Source: https://github.com/datumbox/NaiveBayesClassifier/tree/master/resources/datasets
+Original source: http://www.cs.cornell.edu/people/pabo/movie-review-data/

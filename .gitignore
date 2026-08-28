@@ -29,3 +29,6 @@ work/
 .venv/
 dist/
 __pycache__/
+
+# downloaded NLP models cached beside the notebooks
+notebooks/models/
