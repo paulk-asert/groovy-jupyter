@@ -37,3 +37,7 @@ jupyter kernelspec list
 # pre-warm the Grape cache for the headline notebooks so their first cell is fast
 "$HOME/jdk25/bin/java" -cp "$HOME/.local/share/jupyter/kernels/groovy/lib/*" \
     groovy.ui.GroovyMain binder/prewarm.groovy
+
+# trust the bundled notebooks so their saved rich outputs (SVG charts!) render
+# immediately — untrusted notebooks have image/svg+xml sanitized away by Jupyter
+jupyter trust notebooks/*.ipynb
