@@ -30,7 +30,14 @@ repositories {
 def groovyVersion = '6.0.0-beta-3'
 
 dependencies {
-    implementation 'org.dflib.jjava:jjava-jupyter:1.0-a8'
+    implementation('org.dflib.jjava:jjava-jupyter:1.0-a8') {
+        // released JeroMQ (0.6.0) fakes ipc:// over loopback TCP; the vendored build below has real Unix sockets
+        exclude group: 'org.zeromq', module: 'jeromq'
+    }
+    // JeroMQ built from master (zeromq/jeromq#998: Unix-domain-socket ipc on JDK 16+) — see libs/README.md.
+    // Needed for hosts that launch kernels with --transport=ipc (Google Colab); drop once 0.7.0 is on Central.
+    implementation files('libs/jeromq-0.7.0-SNAPSHOT.jar')
+    runtimeOnly 'eu.neilalexander:jnacl:1.0.0' // JeroMQ's own runtime dependency (CURVE), lost with the exclude above
     implementation "org.apache.groovy:groovy:${groovyVersion}"
     // maven-resolver-based GrapeEngine (no Ivy); discovered via ServiceLoader at runtime
     runtimeOnly "org.apache.groovy:groovy-grape-maven:${groovyVersion}"

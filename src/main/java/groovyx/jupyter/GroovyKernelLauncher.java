@@ -55,6 +55,8 @@ public final class GroovyKernelLauncher {
         kernel.becomeHandlerForConnection(connection);
 
         connection.connect();
+        // ipc transport (e.g. hosted Google Colab): expose the bound sockets under Jupyter's socket names
+        IpcSocketShim.install(connProps);
         connection.waitUntilClose();
     }
 }
