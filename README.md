@@ -75,8 +75,10 @@ Google Colab does) are supported: the kernelspec ships a JeroMQ built from
 master with real Unix-socket `ipc://` (see [libs/README.md](libs/README.md)),
 and the launcher bridges the socket-naming gap in jjava-jupyter ≤ 1.0-a8
 ([dflib/jjava#134](https://github.com/dflib/jjava/issues/134)). Colab's hosted
-runtimes still only *offer* Python, R and Julia; the kernel runs there via
-"connect to local runtime", or wherever a Groovy runtime is added to the image.
+runtimes only *offer* Python, R and Julia, but the kernel can be installed into
+a hosted session (free T4 included): open
+[notebooks/colab-kernel-bootstrap.ipynb](notebooks/colab-kernel-bootstrap.ipynb)
+in Colab, run its install cell, reload the tab.
 
 Current limitations: interrupts are cooperative — loops inside third-party
 jars can't be stopped (restart the kernel); tuple declarations
