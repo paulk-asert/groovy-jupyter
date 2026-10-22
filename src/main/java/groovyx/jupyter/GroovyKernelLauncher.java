@@ -54,6 +54,8 @@ public final class GroovyKernelLauncher {
         kernel.onStartup();
         kernel.becomeHandlerForConnection(connection);
 
+        // ipc transport: sockets left behind by a killed kernel would make the bind below fail
+        IpcSocketShim.clearStale(connProps);
         connection.connect();
         // ipc transport (e.g. hosted Google Colab): expose the bound sockets under Jupyter's socket names
         IpcSocketShim.install(connProps);
