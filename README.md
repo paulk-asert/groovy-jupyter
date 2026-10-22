@@ -33,8 +33,8 @@ and rich display — `List<Map>` rows, `Map`s and GINQ results render as HTML
 tables automatically; `display`/`displaySvg`/`displayHtml`/... helpers with
 in-place updates; renderer extensions self-register from `@Grab`-ed jars via
 a ServiceLoader SPI; `groovy-csv` and `groovy-ginq` ship with the kernel.
-Runs on **JDK 25**. Packaging: a portable kernelspec zip
-(`./gradlew kernelSpecZip`) and a working
+Runs on **JDK 25**. Packaging: a portable kernelspec zip attached to each
+[GitHub release](https://github.com/paulk-asert/groovy-jupyter/releases) and a working
 [Binder deployment](https://mybinder.org/v2/gh/paulk-asert/groovy-jupyter/main?labpath=notebooks%2Fwhiskey.ipynb);
 five example notebooks (clustering, classification, regression, NLP,
 time-series) ported from the BeakerX era, with a
@@ -46,32 +46,45 @@ proposals, not commitments. The full plan-of-attack assessment is recorded in
 Getting started
 ---------------
 
-Requires JDK 17+ (kernelspec records the installing JVM) and any Jupyter
-frontend (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`) — or
-Apache Zeppelin via its built-in Jupyter bridge
-(see [docs/zeppelin.md](docs/zeppelin.md)).
+You need Jupyter (JupyterLab, Jupyter Notebook, VS Code, `jupyter console`, or
+Apache Zeppelin via its built-in Jupyter bridge — see
+[docs/zeppelin.md](docs/zeppelin.md)) and a JDK 17+ `java` on the PATH
+(JDK 25 recommended).
+
+### Install a release
+
+Download `groovy-jupyter-kernelspec-<version>.zip` from the
+[releases page](https://github.com/paulk-asert/groovy-jupyter/releases), then:
+
+```
+unzip groovy-jupyter-kernelspec-<version>.zip
+jupyter kernelspec install groovy-jupyter-kernelspec-<version> --user --name groovy
+```
+
+Pick "Groovy" as the kernel in your frontend, or run
+`jupyter console --kernel groovy`. The installed kernel launches the first
+`java` on the PATH; to pin a JDK or add JVM flags (needed e.g. for Spark
+Connect/Arrow or the Vector API — the Spark notebooks document the exact
+flags), edit `argv` in the installed `kernel.json` (`jupyter kernelspec list`
+shows where it lives).
+
+### Build from source
 
 ```
 ./gradlew installKernelSpec
 ```
 
 installs the kernel jars and `kernel.json` into the per-user Jupyter kernels
-directory. Then pick "Groovy" as the kernel in your frontend, or run
-`jupyter console --kernel groovy`. To pin a specific JVM (e.g. JDK 25) into
-the kernelspec, pass `-PjavaHome=/path/to/jdk`; extra JVM flags go in
-`-PjvmArgs='--add-opens=... -Dfoo=bar'` (needed e.g. for Spark Connect/Arrow
-or the Vector API — the Spark notebooks document the exact flags).
-
-For a Gradle-free install on another machine: `./gradlew kernelSpecZip`
-produces `build/distributions/groovy-jupyter-kernelspec-<version>.zip`; unzip
-it and run `jupyter kernelspec install <unzipped-dir> --user --name groovy`.
-The portable spec launches `java` from the PATH (17+ required).
+directory, recording the JVM that ran the build. To pin a different JVM (e.g.
+JDK 25), pass `-PjavaHome=/path/to/jdk`; extra JVM flags go in
+`-PjvmArgs='--add-opens=... -Dfoo=bar'`. `./gradlew kernelSpecZip` builds the
+same portable zip the releases ship, into `build/distributions/`.
 
 Migrating notebooks from BeakerX? See the
 [BeakerX migration guide](docs/beakerx-migration.md).
 
 Hosts that launch kernels with `--transport=ipc` (Unix domain sockets — hosted
-Google Colab does) are supported: the kernelspec ships a JeroMQ built from
+Google Colab does) are supported: the kernel jar embeds a JeroMQ built from
 master with real Unix-socket `ipc://` (see [libs/README.md](libs/README.md)),
 and the launcher bridges the socket-naming gap in jjava-jupyter ≤ 1.0-a8
 ([dflib/jjava#134](https://github.com/dflib/jjava/issues/134)). Colab's hosted

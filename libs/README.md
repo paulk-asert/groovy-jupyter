@@ -6,6 +6,11 @@
 `f540268c81d787aee5f5ec9bc74a937a7f1ee8e8` (2 Mar 2025). Licence: MPL-2.0
 (`jeromq-LICENSE.txt`).
 
+The build merges its classes (unrelocated) into the kernel jar, together with
+this README and the licence under `META-INF/jeromq/`, so no snapshot jar ships
+in the kernelspec. Cells never see these classes (the session classloader only
+shares Groovy/kernel packages), so a `@Grab`-bed JeroMQ cannot clash.
+
 Why a snapshot: the last JeroMQ release on Maven Central (0.6.0, Feb 2024)
 emulates `ipc://` over loopback TCP and cannot talk to libzmq clients.
 [zeromq/jeromq#998](https://github.com/zeromq/jeromq/pull/998) (merged Sep 2024,

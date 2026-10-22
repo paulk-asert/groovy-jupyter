@@ -21,13 +21,21 @@ plugins {
 }
 
 group = 'groovyx.jupyter'
-version = '0.1.0-SNAPSHOT'
+// releases pass -PreleaseVersion=x.y.z (the release workflow derives it from the vX.Y.Z tag)
+version = findProperty('releaseVersion') ?: '0.1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
 }
 
 def groovyVersion = '6.0.0'
+
+configurations {
+    // jars whose classes are merged into the kernel jar rather than shipped alongside it
+    embedded
+    compileOnly.extendsFrom embedded
+    testRuntimeOnly.extendsFrom embedded
+}
 
 dependencies {
     implementation('org.dflib.jjava:jjava-jupyter:1.0-a8') {
@@ -36,7 +44,9 @@ dependencies {
     }
     // JeroMQ built from master (zeromq/jeromq#998: Unix-domain-socket ipc on JDK 16+) — see libs/README.md.
     // Needed for hosts that launch kernels with --transport=ipc (Google Colab); drop once 0.7.0 is on Central.
-    implementation files('libs/jeromq-0.7.0-SNAPSHOT.jar')
+    // Embedded (unrelocated — jjava-jupyter links against org.zeromq directly) so no snapshot jar ships;
+    // cells can't see it either way (GroovyEvaluator.SHARED_PREFIXES), so a @Grab-bed JeroMQ can't clash.
+    embedded files('libs/jeromq-0.7.0-SNAPSHOT.jar')
     runtimeOnly 'eu.neilalexander:jnacl:1.0.0' // JeroMQ's own runtime dependency (CURVE), lost with the exclude above
     implementation "org.apache.groovy:groovy:${groovyVersion}"
     // maven-resolver-based GrapeEngine (no Ivy); discovered via ServiceLoader at runtime
@@ -58,6 +68,20 @@ dependencies {
 // (portable across environments like Binder where no JDK 17 toolchain exists)
 tasks.withType(JavaCompile).configureEach {
     options.release = 17
+}
+
+jar {
+    // JeroMQ's real Unix-socket ipc lives in META-INF/versions/16 — dead weight unless our manifest says so
+    manifest { attributes 'Multi-Release': 'true' }
+    from({ configurations.embedded.collect { zipTree(it) } }) {
+        exclude 'META-INF/MANIFEST.MF', 'META-INF/maven/**'
+    }
+    // MPL-2.0 binary distribution: ship the licence and say where the exact source is (libs/README.md)
+    from('libs') {
+        include 'jeromq-LICENSE.txt', 'README.md'
+        into 'META-INF/jeromq'
+    }
+    from('LICENSE') { into 'META-INF' }
 }
 
 test {
@@ -98,9 +122,13 @@ tasks.register('kernelSpecZip', Zip) {
     description = 'Builds a portable kernelspec zip (kernel.json + lib/) installable via jupyter kernelspec install'
     group = 'distribution'
     archiveBaseName = 'groovy-jupyter-kernelspec'
-    from(tasks.named('portableKernelJson'))
-    from(tasks.jar) { into 'lib' }
-    from(configurations.runtimeClasspath) { into 'lib' }
+    // one top-level directory, so unzipping doesn't spill kernel.json into the current directory
+    into("groovy-jupyter-kernelspec-${project.version}") {
+        from(tasks.named('portableKernelJson'))
+        from('LICENSE')
+        from(tasks.jar) { into 'lib' }
+        from(configurations.runtimeClasspath) { into 'lib' }
+    }
 }
 
 tasks.register('installKernelSpec', Sync) {
