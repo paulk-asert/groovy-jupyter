@@ -40,8 +40,9 @@ behave identically here.
 
 - **Anchor `@Grab` on an import or declaration.** A `@Grab` annotation attached
   to a bare assignment statement (`@Grab(...)` directly followed by `x = 1`)
-  currently causes Groovy to silently drop that statement. Grabs followed by an
-  `import` — the usual style — are fine.
+  turns that assignment into an annotated local declaration (as any annotation
+  would), so `x` works within the cell but does not persist to later cells.
+  Grabs followed by an `import` — the usual style — are fine.
 - **GINQ grouping over CSV-style data: prefer `groupby ... into`.** Groovy 6's
   `groupby k into g` binds the group as a first-class object with explicit
   aggregate lambdas:
@@ -55,9 +56,10 @@ behave identically here.
   }
   ```
 
-  Besides reading well, this form sidesteps issues in the classic implicit
-  aggregates with capitalized column names (the norm in CSV headers) present
-  in current Groovy 6 betas.
+  Besides reading well, this form sidesteps a compiler error in the classic
+  implicit aggregates, still present in Groovy 6.0.0: calling a method on one,
+  e.g. `(avg(r.'Petal length' as double) as double).round(2)`, fails with
+  `BUG! exception in phase 'conversion'`.
 - **Session semantics are a superset of BeakerX's.** Undeclared variables
   persist (as before), and `def`/typed declarations at the top level of a cell
   now persist too, as do methods and classes defined in cells. Tuple

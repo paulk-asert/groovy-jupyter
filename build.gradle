@@ -27,7 +27,7 @@ repositories {
     mavenCentral()
 }
 
-def groovyVersion = '6.0.0-beta-3'
+def groovyVersion = '6.0.0'
 
 dependencies {
     implementation('org.dflib.jjava:jjava-jupyter:1.0-a8') {
