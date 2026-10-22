@@ -21,9 +21,40 @@ under the License.
 
 A release is a pushed `vX.Y.Z` tag. The
 [Release workflow](../.github/workflows/release.yml) builds with
-`-PreleaseVersion=X.Y.Z`, runs the tests, and creates a **draft** GitHub
-release with `groovy-jupyter-kernelspec-X.Y.Z.zip` and `SHA256SUMS` attached.
-Nothing is public until the draft is published by hand.
+`-PreleaseVersion=X.Y.Z`, runs the tests, creates a **draft** GitHub release
+with `groovy-jupyter-kernelspec-X.Y.Z.zip` and `SHA256SUMS` attached, and
+uploads `io.github.paulk-asert:groovy-jupyter:X.Y.Z` (jar, sources, javadoc,
+POM, signatures) to a Central Portal **deployment**. Nothing is public until
+both are published by hand.
+
+## Maven Central: one-time setup
+
+1. Sign in to [central.sonatype.com](https://central.sonatype.com) with the
+   `paulk-asert` GitHub account and check that the `io.github.paulk-asert`
+   namespace shows as verified. GitHub sign-in usually verifies it
+   automatically. If not, add it under *Namespaces* and follow the
+   verification steps (a temporary public repo named after the given key).
+2. *Account → Generate User Token*. The token's username and password are
+   **not** your login.
+3. A signing key, with its public half on a keyserver. An existing release
+   key is fine:
+
+   ```
+   gpg --quick-generate-key "Paul King (groovy-jupyter releases)" rsa4096 sign 3y
+   gpg --keyserver keyserver.ubuntu.com --send-keys <key id>
+   ```
+
+4. Repository secrets (Settings → Secrets and variables → Actions), e.g. via `gh`:
+
+   ```
+   gh secret set MAVEN_CENTRAL_USERNAME        # token username
+   gh secret set MAVEN_CENTRAL_PASSWORD        # token password
+   gpg --export-secret-keys --armor <key id> | gh secret set SIGNING_KEY
+   gh secret set SIGNING_KEY_PASSWORD          # omit if the key has no passphrase
+   ```
+
+Until these exist, a tag still produces the GitHub draft and the Central
+step logs a warning and is skipped.
 
 ## Checklist
 
@@ -47,10 +78,13 @@ Nothing is public until the draft is published by hand.
    git push origin vX.Y.Z
    ```
 
-4. **Publish.** Edit the draft's generated notes: headline changes, the
-   Groovy and minimum-JDK versions, known limitations. Then publish it.
-   Tick *pre-release* while the version is 0.x if you want it kept out of
-   "latest".
+4. **Publish.** On the Central Portal's
+   [Deployments](https://central.sonatype.com/publishing/deployments) page,
+   wait for the deployment to show *Validated*, then click *Publish*. It
+   takes 10–30 minutes to appear on Maven Central. On GitHub, edit the
+   draft's generated notes (headline changes, the Groovy and minimum-JDK
+   versions, known limitations) and publish it. Tick *pre-release* while the
+   version is 0.x if you want it kept out of "latest".
 5. **Afterwards.** Bump the default `version` in `build.gradle` to the next
    `-SNAPSHOT`.
 

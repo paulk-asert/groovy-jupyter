@@ -18,9 +18,11 @@
  */
 plugins {
     id 'java'
+    id 'com.vanniktech.maven.publish' version '0.37.0'
 }
 
-group = 'groovyx.jupyter'
+// Maven coordinates io.github.paulk-asert:groovy-jupyter (the Java package stays groovyx.jupyter)
+group = 'io.github.paulk-asert'
 // releases pass -PreleaseVersion=x.y.z (the release workflow derives it from the vX.Y.Z tag)
 version = findProperty('releaseVersion') ?: '0.1.0-SNAPSHOT'
 
@@ -51,6 +53,13 @@ dependencies {
     implementation "org.apache.groovy:groovy:${groovyVersion}"
     // maven-resolver-based GrapeEngine (no Ivy); discovered via ServiceLoader at runtime
     runtimeOnly "org.apache.groovy:groovy-grape-maven:${groovyVersion}"
+    // groovy-grape-maven 6.0.0's POM lists maven-resolver-provider (-> resolver 2.0.21) before
+    // maven-resolver-supplier-mvn4 2.0.23, so nearest-wins resolvers (Maven, jbang) mix the two and
+    // @Grab dies with NoSuchMethodError; Gradle picks 2.0.23 anyway. Direct deps win for POM consumers.
+    // Revisit on each Groovy bump: match whatever supplier-mvn4 version groovy-grape-maven declares.
+    ['api', 'spi', 'util', 'impl', 'connector-basic', 'transport-file', 'transport-apache'].each {
+        runtimeOnly "org.apache.maven.resolver:maven-resolver-${it}:2.0.23"
+    }
     // ASF Groovy optional modules shipped with the kernel (not third-party bundling);
     // which further modules (json, sql, ...) ship by default is pending team review
     runtimeOnly "org.apache.groovy:groovy-csv:${groovyVersion}"
@@ -84,8 +93,48 @@ jar {
     from('LICENSE') { into 'META-INF' }
 }
 
+// Maven Central (Central Portal). Uploads only: a deployment goes public when
+// "Publish" is clicked on central.sonatype.com. Credentials and the signing key
+// come from ORG_GRADLE_PROJECT_* environment variables — see docs/releasing.md.
+// The embedded configuration is compileOnly, so JeroMQ never appears in the POM.
+mavenPublishing {
+    publishToMavenCentral()
+    signAllPublications()
+    coordinates(project.group as String, 'groovy-jupyter', project.version as String)
+    pom {
+        name = 'groovy-jupyter'
+        description = 'A Jupyter kernel for Apache Groovy'
+        inceptionYear = '2026'
+        url = 'https://github.com/paulk-asert/groovy-jupyter'
+        licenses {
+            license {
+                name = 'The Apache License, Version 2.0'
+                url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                distribution = 'repo'
+            }
+        }
+        developers {
+            developer {
+                id = 'paulk-asert'
+                name = 'Paul King'
+                url = 'https://github.com/paulk-asert'
+            }
+        }
+        scm {
+            url = 'https://github.com/paulk-asert/groovy-jupyter'
+            connection = 'scm:git:https://github.com/paulk-asert/groovy-jupyter.git'
+            developerConnection = 'scm:git:ssh://git@github.com/paulk-asert/groovy-jupyter.git'
+        }
+    }
+}
+
 test {
     useJUnitPlatform()
+}
+
+javadoc {
+    // published javadoc jar (a Central requirement); keep doclint, minus the "no comment" noise
+    options.addStringOption('Xdoclint:all,-missing', '-quiet')
 }
 
 def kernelInstallDir = {

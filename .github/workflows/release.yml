@@ -16,9 +16,10 @@
 # under the License.
 
 # Builds the portable kernelspec zip. A pushed vX.Y.Z tag creates a *draft*
-# GitHub release with the zip + checksum attached (published by hand after
-# review); a manual run is a dry run that only uploads the zip as a workflow
-# artifact. See docs/releasing.md.
+# GitHub release with the zip + checksum attached and uploads the Maven
+# artifacts to a Central Portal deployment — both published by hand after
+# review. A manual run is a dry run: it uploads the zip as a workflow artifact
+# and publishes to the runner's local Maven repo only. See docs/releasing.md.
 name: Release
 
 on:
@@ -45,7 +46,8 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             ./gradlew --no-daemon test kernelSpecZip -PreleaseVersion="${GITHUB_REF_NAME#v}"
           else
-            ./gradlew --no-daemon test kernelSpecZip
+            # publishToMavenLocal exercises the POM, sources and javadoc jars without credentials
+            ./gradlew --no-daemon test kernelSpecZip publishToMavenLocal
           fi
           cd build/distributions && sha256sum *.zip > SHA256SUMS
 
@@ -61,3 +63,18 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" build/distributions/* \
             --draft --generate-notes --title "groovy-jupyter ${GITHUB_REF_NAME#v}"
+
+      - name: Upload to Maven Central
+        if: github.ref_type == 'tag'
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$ORG_GRADLE_PROJECT_mavenCentralUsername" || -z "$ORG_GRADLE_PROJECT_signingInMemoryKey" ]]; then
+            echo "::warning::Maven Central secrets not configured; skipped the Central upload"
+            exit 0
+          fi
+          # uploads only; click "Publish" on https://central.sonatype.com/publishing/deployments
+          ./gradlew --no-daemon publishToMavenCentral -PreleaseVersion="${GITHUB_REF_NAME#v}"
